@@ -3,6 +3,7 @@
  (owl args)
  (owl eval)
  (owl regex)
+ (owl sort)
  (prefix (owl sys) sys/))
 
 (define cfg-default
@@ -18,6 +19,9 @@
 (define (basename s)
   (last ((string->regex "c/\\//") s) "invalid-path"))
 
+(define (f->f of i)
+  (for-each (λ (s) (write-bytes of (string->list s))) (force-ll (lines i))))
+
 (define (md->html path cfg)
   (let* ((nam (basename path))
          (ofp ((string->regex "s/\\.md$/.html/") (string-append (aq 'output-folder cfg) "/" nam)))
@@ -30,10 +34,27 @@
                               (aq 'pandoc-args cfg)
                               "-o -"
                               path)))))
-      (for-each (λ (s) (write-bytes of (string->list s))) (force-ll (lines bf)))
-      (for-each (λ (s) (write-bytes of (string->list s))) (force-ll (lines r)))
-      (for-each (λ (s) (write-bytes of (string->list s))) (force-ll (lines af)))
+      (f->f of bf)
+      (f->f of r)
+      (f->f of af)
       (map sys/close (filter self (list of w r bf af))))))
+
+(define (write-index cfg)
+  (print "write-index")
+  (let* ((o (aq 'output-folder cfg))
+         (idx (open-output-file (string-append o "/index.html")))
+         (bf (open-input-file (aq 'template-before cfg)))
+         (af (open-input-file (aq 'template-after cfg))))
+    (f->f idx bf)
+    (print-to idx "<ul>")
+    (for-each
+     (λ (s)
+       (let* ((title ((string->regex "s/[_\\-]/ /g") s))
+              (title ((string->regex "s/\\.html$//g") title)))
+         (print-to idx (string-append "<li><a href=\"" s "\">" title "</a></li>"))))
+     (sys/dir->list o))
+    (print-to idx "</ul>")
+    (f->f idx af)))
 
 (λ (args)
   (let* ((path-start (if (null? (cdr args)) "." (cadr args)))
@@ -41,14 +62,24 @@
                   (exported-eval (read (open-input-file (string-append path-start "/cfg.scm"))) *toplevel*)
                   cfg-default))
          (path (string-append path-start "/" (aq 'markdown-folder cfg)))
-         (md-files (filter
-                    (λ (s) ((string->regex "m/\\.md$/") s))
-                    (map (λ (s) (string-append path "/" s)) (sys/dir->list path)))))
+         (md-files (sort
+                    (λ (a b)
+                      (let ((ta (aq 'mtim (sys/stat a #t)))
+                            (tb (aq 'mtim (sys/stat b #t))))
+                        (> ta tb)))
+                    (filter
+                     (λ (s) ((string->regex "m/\\.md$/") s))
+                     (map (λ (s) (string-append path "/" s)) (sys/dir->list path)))))
+         (op (aq 'output-folder cfg)))
     (print "md-files: " md-files)
-    (when (not (sys/file? (aq 'output-folder cfg)))
+
+    (when (not (sys/file? op))
       (sys/mkdir (aq 'output-folder cfg) #o777))
+
+    (for-each sys/unlink (map (λ (s) (string-append path-start "/" op "/" s)) (sys/dir->list (string-append path-start "/" op))))
 
     (for-each
      (λ (path) (md->html path cfg))
      md-files)
+    (write-index cfg)
     (print "ok")))
