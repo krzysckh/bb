@@ -21,9 +21,7 @@
 
 (define (f->f of i)
   (for-each
-   (λ (s)
-     (write-bytes of (string->list s))
-     (write-bytes of '(10)))
+   (λ (s) (print-to of s))
    (force-ll (lines i))))
 
 (define (md->html path cfg)
