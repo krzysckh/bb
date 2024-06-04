@@ -20,7 +20,11 @@
   (last ((string->regex "c/\\//") s) "invalid-path"))
 
 (define (f->f of i)
-  (for-each (λ (s) (write-bytes of (string->list s))) (force-ll (lines i))))
+  (for-each
+   (λ (s)
+     (write-bytes of (string->list s))
+     (write-bytes of '(10)))
+   (force-ll (lines i))))
 
 (define (md->html path cfg)
   (let* ((nam (basename path))
@@ -42,6 +46,7 @@
 (define (write-index cfg)
   (print "write-index")
   (let* ((o (aq 'output-folder cfg))
+         (l (sys/dir->list o)) ;; before creating index.html
          (idx (open-output-file (string-append o "/index.html")))
          (bf (open-input-file (aq 'template-before cfg)))
          (af (open-input-file (aq 'template-after cfg))))
@@ -52,7 +57,7 @@
        (let* ((title ((string->regex "s/[_\\-]/ /g") s))
               (title ((string->regex "s/\\.html$//g") title)))
          (print-to idx (string-append "<li><a href=\"" s "\">" title "</a></li>"))))
-     (sys/dir->list o))
+     l)
     (print-to idx "</ul>")
     (f->f idx af)))
 
@@ -76,10 +81,14 @@
     (when (not (sys/file? op))
       (sys/mkdir (aq 'output-folder cfg) #o777))
 
-    (for-each sys/unlink (map (λ (s) (string-append path-start "/" op "/" s)) (sys/dir->list (string-append path-start "/" op))))
+    (for-each (λ (s)
+                (print "delete " s)
+                (sys/unlink s))
+              (map (λ (s) (string-append path-start "/" op "/" s)) (sys/dir->list (string-append path-start "/" op))))
 
     (for-each
      (λ (path) (md->html path cfg))
      md-files)
     (write-index cfg)
-    (print "ok")))
+    (print "ok")
+    0))
