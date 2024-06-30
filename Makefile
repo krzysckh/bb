@@ -8,4 +8,4 @@ install: bb
 uninstall: bb
 	rm -v $(PREFIX)/bin/bb
 clean:
-	rm bb
+	rm -f bb

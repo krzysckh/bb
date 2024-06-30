@@ -19,6 +19,11 @@
 (define (basename s)
   (last ((string->regex "c/\\//") s) "invalid-path"))
 
+(define (Tsort a b)
+  (let ((ta (aq 'mtim (sys/stat a #t)))
+        (tb (aq 'mtim (sys/stat b #t))))
+    (< ta tb)))
+
 (define (f->f of i)
   (for-each
    (λ (s) (print-to of s))
@@ -44,7 +49,9 @@
 (define (write-index cfg)
   (print "write-index")
   (let* ((o (aq 'output-folder cfg))
-         (l (sys/dir->list o)) ;; before creating index.html
+         (_ (sys/chdir o))
+         (l (sort Tsort (sys/dir->list "."))) ;; before creating index.html
+         (_ (sys/chdir ".."))
          (idx (open-output-file (string-append o "/index.html")))
          (bf (open-input-file (aq 'template-before cfg)))
          (af (open-input-file (aq 'template-after cfg))))
@@ -66,10 +73,7 @@
                   cfg-default))
          (path (string-append path-start "/" (aq 'markdown-folder cfg)))
          (md-files (sort
-                    (λ (a b)
-                      (let ((ta (aq 'mtim (sys/stat a #t)))
-                            (tb (aq 'mtim (sys/stat b #t))))
-                        (> ta tb)))
+                    Tsort
                     (filter
                      (λ (s) ((string->regex "m/\\.md$/") s))
                      (map (λ (s) (string-append path "/" s)) (sys/dir->list path)))))
