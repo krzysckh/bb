@@ -22,7 +22,7 @@
 (define (Tsort a b)
   (let ((ta (aq 'mtim (sys/stat a #t)))
         (tb (aq 'mtim (sys/stat b #t))))
-    (< ta tb)))
+    (> ta tb)))
 
 (define (f->f of i)
   (for-each
@@ -46,12 +46,10 @@
       (f->f of af)
       (map sys/close (filter self (list of w r bf af))))))
 
-(define (write-index cfg)
+(define (write-index cfg md-files)
   (print "write-index")
   (let* ((o (aq 'output-folder cfg))
-         (_ (sys/chdir o))
-         (l (sort Tsort (sys/dir->list "."))) ;; before creating index.html
-         (_ (sys/chdir ".."))
+         (l (map (λ (s) ((string->regex "s/\\.md$/.html/") (basename s))) md-files))
          (idx (open-output-file (string-append o "/index.html")))
          (bf (open-input-file (aq 'template-before cfg)))
          (af (open-input-file (aq 'template-after cfg))))
@@ -91,6 +89,6 @@
     (for-each
      (λ (path) (md->html path cfg))
      md-files)
-    (write-index cfg)
+    (write-index cfg md-files)
     (print "ok")
     0))
