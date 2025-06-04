@@ -1,9 +1,7 @@
 (import
  (owl toplevel)
- (owl args)
  (owl eval)
- (owl regex)
- (owl sort)
+ (prefix (robusta encoding html) H/)
  (prefix (owl sys) sys/))
 
 (define cfg-default
@@ -12,17 +10,22 @@
     (template-before . "template-before.html")
     (template-after . "template-after.html")
     (markdown-folder . "md/")
-    (output-folder . "b/")))
+    (output-folder . "b/")
+    (site-name . "")
+    (rss-description . "")
+    (rss . "posts.rss")))
 
 (define (aq v a) (cdr* (assq v a)))
 
 (define (basename s)
   (last ((string->regex "c/\\//") s) "invalid-path"))
 
+(define -spl (string->regex "c/-/"))
+
+(define undate (string->regex "s/^....-..-..-//"))
+
 (define (Tsort a b)
-  (let ((ta (aq 'mtim (sys/stat a #t)))
-        (tb (aq 'mtim (sys/stat b #t))))
-    (> ta tb)))
+  (string-ci>? a b))
 
 (define (f->f of i)
   (for-each
@@ -30,7 +33,7 @@
    (force-ll (lines i))))
 
 (define (md->html path cfg)
-  (let* ((nam (basename path))
+  (let* ((nam (undate (basename path)))
          (ofp ((string->regex "s/\\.md$/.html/") (string-append (aq 'output-folder cfg) "/" nam)))
          (of (open-output-file ofp))
          (bf (open-input-file (aq 'template-before cfg)))
@@ -46,10 +49,19 @@
       (f->f of af)
       (map sys/close (filter self (list of w r bf af))))))
 
+(define (md-name->html-basename s)
+  ((string->regex "s/\\.md$/.html/") (basename s)))
+
+(define (filename->title f)
+  (let* ((s (undate f))
+         (s ((string->regex "s/[_\\-]/ /g") s))
+         (s ((string->regex "s/(\\.html$)|(\\.md$)//g") s)))
+    s))
+
 (define (write-index cfg md-files)
   (print "write-index")
   (let* ((o (aq 'output-folder cfg))
-         (l (map (λ (s) ((string->regex "s/\\.md$/.html/") (basename s))) md-files))
+         (l (map md-name->html-basename md-files))
          (idx (open-output-file (string-append o "/index.html")))
          (bf (open-input-file (aq 'template-before cfg)))
          (af (open-input-file (aq 'template-after cfg))))
@@ -57,12 +69,42 @@
     (print-to idx "<ul>")
     (for-each
      (λ (s)
-       (let* ((title ((string->regex "s/[_\\-]/ /g") s))
-              (title ((string->regex "s/\\.html$//g") title)))
-         (print-to idx (string-append "<li><a href=\"" s "\">" title "</a></li>"))))
+       (let* ((date (take (-spl s) 3))
+              (title (filename->title s)))
+         (print-to idx (string-append "<li><a href=\"" (undate s) "\">"
+                                      title
+                                      "</a> <sub> (" (lref date 2) "/" (lref date 1) "/" (car date) ")"
+                                      "</sub></li>"))))
      l)
     (print-to idx "</ul>")
     (f->f idx af)))
+
+(define (write-rss cfg md-files)
+  (print "write-rss")
+  (let* ((loc (aq 'rss cfg))
+         (f (open-output-file loc))
+         (desc (aq 'rss-description cfg))
+         (out (aq 'output-folder cfg))
+         (site-name (aq 'site-name cfg)))
+    (write-bytes
+     f
+     (string->bytes
+      (str
+       "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n"
+       (H/encode*
+        `((rss (version . "2.0"))
+          (channel
+           (title ,site-name)
+           (link ,(str "https://" site-name))
+           (description ,desc)
+           ,@(map
+              (λ (f)
+                `(item
+                  (title ,(filename->title (basename f)))
+                  (link ,(str "https://" site-name "/" out (undate (md-name->html-basename f))))))
+              md-files)))
+       ;; ))))))
+        #n))))))
 
 (λ (args)
   (let* ((path-start (if (null? (cdr args)) "." (cadr args)))
@@ -90,5 +132,6 @@
      (λ (path) (md->html path cfg))
      md-files)
     (write-index cfg md-files)
+    (write-rss cfg md-files)
     (print "ok")
     0))

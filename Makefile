@@ -1,8 +1,8 @@
 PREFIX=/usr/local
 CC=tcc
 
-bb:
-	ol -x c bb.scm | $(CC) -x c - -o bb
+bb: bb.scm
+	ol -i lib/robusta -x c bb.scm | $(CC) -x c - -o bb -lsqlite3
 install: bb
 	cp -v bb $(PREFIX)/bin/bb
 uninstall: bb
