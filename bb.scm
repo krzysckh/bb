@@ -79,6 +79,15 @@
     (print-to idx "</ul>")
     (f->f idx af)))
 
+(define month-names (tuple "Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec"))
+
+(define (date-rfc822 yr mon day)
+  (lets ((_ d (week-info day mon yr)))
+    (format
+     #f "~a, ~2,'0d ~a ~d 00:00:01 +0200"
+     (substring (ref day-names-en d) 0 3)
+     day (ref month-names mon) yr)))
+
 (define (write-rss cfg md-files)
   (print "write-rss")
   (let* ((loc (aq 'rss cfg))
@@ -99,11 +108,12 @@
            (description ,desc)
            ,@(map
               (λ (f)
-                `(item
-                  (title ,(filename->title (basename f)))
-                  (link ,(str "https://" site-name "/" out (undate (md-name->html-basename f))))))
+                (let ((s (md-name->html-basename f)))
+                  `(item
+                    (pubDate ,(apply date-rfc822 (map string->number (take (-spl s) 3))))
+                    (title ,(filename->title (basename f)))
+                    (link ,(str "https://" site-name "/" out (undate s))))))
               md-files)))
-       ;; ))))))
         #n))))))
 
 (λ (args)
